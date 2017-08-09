@@ -30,7 +30,8 @@ namespace ExcelDataReader
             // Copy the configuration to prevent external changes
             Configuration = new ExcelReaderConfiguration()
             {
-                FallbackEncoding = configuration.FallbackEncoding
+                FallbackEncoding = configuration.FallbackEncoding,
+                Password = configuration.Password
             };
         }
 
@@ -41,8 +42,12 @@ namespace ExcelDataReader
 
         public string Name => _worksheetIterator?.Current?.Name;
 
+        public string CodeName => _worksheetIterator?.Current?.CodeName;
+
         public string VisibleState => _worksheetIterator?.Current?.VisibleState;
 
+        public HeaderFooter HeaderFooter => _worksheetIterator?.Current?.HeaderFooter;
+        
         public int Depth { get; private set; }
 
         public int ResultsCount => Workbook?.ResultsCount ?? -1;

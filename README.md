@@ -9,6 +9,17 @@ If you are reporting an issue it is really useful if you can supply an example E
 
 [![Build status](https://ci.appveyor.com/api/projects/status/ii6hbs9otpbg1nqh/branch/master?svg=true)](https://ci.appveyor.com/project/andersnm/exceldatareader/branch/master) [![Build status](https://ci.appveyor.com/api/projects/status/ii6hbs9otpbg1nqh/branch/develop?svg=true)](https://ci.appveyor.com/project/andersnm/exceldatareader/branch/develop)
 
+## Supported file formats and versions
+
+| File Type | Container Format  | File Format    | Excel Version(s) |
+| --------- | ----------------- | -------------- | ---------------- |
+| .xlsx     | ZIP               | OpenXml        | 2007 and newer |
+| .xls      | Compound Document | BIFF8          | 97, 2000, XP, 2003<br>98, 2001, v.X, 2004 (Mac) |
+| .xls      | Compound Document | BIFF5          | 5.0, 95 |
+| .xls      | -                 | BIFF4          | 4.0 |
+| .xls      | -                 | BIFF3          | 3.0 |
+| .xls      | -                 | BIFF2          | 2.0, 2.2 |
+
 ## Finding the binaries
 It is recommended to use NuGet. F.ex through the VS Package Manager Console `Install-Package <package>` or using the VS "Manage NuGet Packages..." extension. 
 
@@ -16,11 +27,10 @@ As of ExcelDataReader version 3.0, the project was split into multiple packages:
 
 Install the `ExcelDataReader` base package to use the "low level" reader interface. Compatible with net20, net45 and netstandard 1.3.
 
-Install the `ExcelDataReader.DataSet` extension package to use the AsDataSet() method and load spreadsheets into System.Data.DataSet. This will also pull in the base package. Compatible with net20 and net45.
+Install the `ExcelDataReader.DataSet` extension package to use the `AsDataSet()` method to populate a `System.Data.DataSet`. This will also pull in the base package. Compatible with net20 and net45.
 
 
 ## How to use
-### C# code :
 ```c#
 using (var stream = File.Open(filePath, FileMode.Open, FileAccess.Read)) {
 
@@ -55,7 +65,9 @@ The `AsDataSet()` extension method is a convenient helper for quickly getting th
 - `NextResult()` advances the cursor to the next sheet.
 - `ResultsCount` returns the number of sheets in the current workbook.
 - `Name` returns the name of the current sheet.
+- `CodeName` returns the VBA code name identifier of the current sheet.
 - `FieldCount` returns the number of columns in the current sheet.
+- `HeaderFooter` returns an object with information about the headers and footers, or `null` if there are none.
 - `GetFieldType()` returns the type of a value in the current row. Always one of the types supported by Excel: `double`, `int`, `bool`, `DateTime`, `string`, or `null` if there is no value.
 - `IsDBNull()` checks if a value in the current row is null. 
 - `GetValue()` returns a value from the current row as an `object`, or `null` if there is no value.
@@ -63,12 +75,12 @@ The `AsDataSet()` extension method is a convenient helper for quickly getting th
 - The typed `Get*()` methods throw `InvalidCastException` unless the types match exactly.
 
 
-### CreateReader configuration options
+### CreateReader() configuration options
 
-The `CreateReader()`, `CreateBinaryReader()`, `CreateOpenXmlReader()` functions accept an optional configuration object to modify the behavior of the reader:
+The `ExcelReaderFactory.CreateReader()`, `CreateBinaryReader()`, `CreateOpenXmlReader()` methods accept an optional configuration object to modify the behavior of the reader:
 
 ```c#
-var reader = ExcelReaderFactory.CreateReader(new ExcelReaderConfiguration() {
+var reader = ExcelReaderFactory.CreateReader(stream, new ExcelReaderConfiguration() {
 
 	// Gets or sets the encoding to use when the input XLS lacks a CodePage 
 	// record. Default: cp1252. (XLS BIFF2-5 only)
@@ -77,9 +89,9 @@ var reader = ExcelReaderFactory.CreateReader(new ExcelReaderConfiguration() {
 ```
 
 
-### AsDataSet configuration options
+### AsDataSet() configuration options
 
-The `AsDataSet()` function accepts an optional configuration object to modify the behavior of the DataSet conversion:
+The `AsDataSet()` method accepts an optional configuration object to modify the behavior of the DataSet conversion:
 
 ```c#
 var result = reader.AsDataSet(new ExcelDataSetConfiguration() {
@@ -109,13 +121,14 @@ var result = reader.AsDataSet(new ExcelDataSetConfiguration() {
 ```
 
 
-## Supported file formats and versions
+## Important note on .NET Core
 
-| File Type | Container Format  | Storage Format | Excel Version(s) |
-| --------- | ----------------- | -------------- | ---------------- |
-| .xlsx     | ZIP               | OpenXml        | 2007 and newer |
-| .xls      | Compound Document | BIFF8          | 97, 2000, XP, 2003<br>98, 2001, v.X, 2004 (Mac) |
-| .xls      | Compound Document | BIFF5          | 5.0, 95 |
-| .xls      | -                 | BIFF4          | 4.0 |
-| .xls      | -                 | BIFF3          | 3.0 |
-| .xls      | -                 | BIFF2          | 2.0, 2.2 |
+By default, ExcelDataReader throws a NotSupportedException "No data is available for encoding 1252." on .NET Core.
+
+To fix, add a dependency to the package `System.Text.Encoding.CodePages` and then add code to register the code page provider during application initialization (f.ex in Startup.cs):
+
+```c#
+System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+```
+
+This is required to parse strings in binary BIFF2-5 Excel documents encoded with DOS-era code pages. These encodings are registered by default in the full .NET Framework, but not on .NET Core.

@@ -25,7 +25,9 @@ namespace ExcelDataReader.Tests
         [TestInitialize]
         public void TestInitialize()
         {
-            // Thread.CurrentThread.CurrentCulture = new CultureInfo("de-DE", false);
+#if NETCOREAPP1_0
+            System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+#endif
         }
 
         [TestMethod]
@@ -284,11 +286,7 @@ namespace ExcelDataReader.Tests
         [TestMethod]
         public void Fail_Test()
         {
-#if NET20 || EXCELDATAREADER_NET20
-            var expectedException = typeof(ICSharpCode.SharpZipLib.Zip.ZipException);
-#else
-            var expectedException = typeof(InvalidDataException);
-#endif
+            var expectedException = typeof(Exceptions.HeaderException);
 
             var exception = Assert.Throws(expectedException, () =>
                 {
@@ -297,11 +295,7 @@ namespace ExcelDataReader.Tests
                     }
                 });
 
-#if NET20 || EXCELDATAREADER_NET20
-            Assert.AreEqual("Cannot find central directory", exception.Message);
-#else
-            Assert.AreEqual("End of Central Directory record could not be found.", exception.Message);
-#endif
+            Assert.AreEqual("Invalid file signature.", exception.Message);
         }
 
         [TestMethod]
@@ -996,6 +990,195 @@ namespace ExcelDataReader.Tests
                 // Test out of range double formatted as date returns double
                 Assert.AreEqual(1000000000000D, dataset.Tables[0].Rows[0][0]);
             }
+        }
+
+        [TestMethod]
+        public void GitIssue_241_Simple()
+        {
+            using (var reader = ExcelReaderFactory.CreateOpenXmlReader(Configuration.GetTestWorkbook("Test_git_issue_224_simple")))
+            {
+                Assert.That(reader.HeaderFooter?.OddHeader, Is.EqualTo("&LLeft едц &T&CCenter едц &D&RRight  едц &P"), "Header");
+                Assert.That(reader.HeaderFooter?.OddFooter, Is.EqualTo("&LLeft едц &P&CFooter едц &P&RRight едц &D"), "Footer");
+            }
+        }
+
+        [TestMethod]
+        public void GitIssue_241_FirstOddEven()
+        {
+            using (var reader = ExcelReaderFactory.CreateOpenXmlReader(Configuration.GetTestWorkbook("Test_git_issue_224_firstoddeven")))
+            {
+                Assert.That(reader.HeaderFooter, Is.Not.Null);
+
+                Assert.That(reader.HeaderFooter?.HasDifferentFirst, Is.True, "HasDifferentFirst");
+                Assert.That(reader.HeaderFooter?.HasDifferentOddEven, Is.True, "HasDifferentOddEven");
+
+                Assert.That(reader.HeaderFooter?.FirstHeader, Is.EqualTo("&CFirst header center"), "First Header");
+                Assert.That(reader.HeaderFooter?.FirstFooter, Is.EqualTo("&CFirst footer center"), "First Footer");
+                Assert.That(reader.HeaderFooter?.OddHeader, Is.EqualTo("&LLeft едц &T&COdd page header&RRight  едц &P"), "Odd Header");
+                Assert.That(reader.HeaderFooter?.OddFooter, Is.EqualTo("&LLeft едц &P&COdd Footer едц &P&RRight едц &D"), "Odd Footer");
+                Assert.That(reader.HeaderFooter?.EvenHeader, Is.EqualTo("&L&A&CEven page header"), "Even Header");
+                Assert.That(reader.HeaderFooter?.EvenFooter, Is.EqualTo("&CEven page footer"), "Even Footer");
+            }
+        }
+
+        [TestMethod]
+        public void GitIssue_245_CodeName()
+        {
+            // Test no codename = null
+            using (var reader = ExcelReaderFactory.CreateOpenXmlReader(Configuration.GetTestWorkbook("xTest10x10")))
+            {
+                Assert.AreEqual(null, reader.CodeName);
+            }
+
+            // Test CodeName is set
+            using (var reader = ExcelReaderFactory.CreateOpenXmlReader(Configuration.GetTestWorkbook("xTest_Excel_Dataset")))
+            {
+                Assert.AreEqual("Sheet1", reader.CodeName);
+            }
+        }
+
+        [TestMethod]
+        public void GitIssue_250_RichText()
+        {
+            using (var reader = ExcelReaderFactory.CreateOpenXmlReader(Configuration.GetTestWorkbook("xTest_git_issue_250_richtext")))
+            {
+                reader.Read();
+                var text = reader.GetString(0);
+                Assert.AreEqual("Lorem ipsum dolor sit amet, ei pri verterem efficiantur, per id meis idque deterruisset.", text);
+            }
+        }
+
+        [TestMethod]
+        public void GitIssue_242_StandardEncryption()
+        {
+            // OpenXml standard encryption aes128+sha1
+            using (var reader = ExcelReaderFactory.CreateOpenXmlReader(
+                Configuration.GetTestWorkbook("standard_AES128_SHA1_ECB_pwd_password"),
+                new ExcelReaderConfiguration() { Password = "password" }))
+            {
+                reader.Read();
+                Assert.AreEqual("Password: password", reader.GetString(0));
+            }
+
+            // OpenXml standard encryption aes192+sha1
+            using (var reader = ExcelReaderFactory.CreateOpenXmlReader(
+                Configuration.GetTestWorkbook("standard_AES192_SHA1_ECB_pwd_password"),
+                new ExcelReaderConfiguration() { Password = "password" }))
+            {
+                reader.Read();
+                Assert.AreEqual("Password: password", reader.GetString(0));
+            }
+
+            // OpenXml standard encryption aes256+sha1
+            using (var reader = ExcelReaderFactory.CreateOpenXmlReader(
+                Configuration.GetTestWorkbook("standard_AES256_SHA1_ECB_pwd_password"),
+                new ExcelReaderConfiguration() { Password = "password" }))
+            {
+                reader.Read();
+                Assert.AreEqual("Password: password", reader.GetString(0));
+            }
+        }
+
+        [TestMethod]
+        public void GitIssue_242_AgileEncryption()
+        {
+            // OpenXml agile encryption aes128+md5+cbc
+            using (var reader = ExcelReaderFactory.CreateOpenXmlReader(
+                Configuration.GetTestWorkbook("agile_AES128_MD5_CBC_pwd_password"),
+                new ExcelReaderConfiguration() { Password = "password" }))
+            {
+                reader.Read();
+                Assert.AreEqual("Password: password", reader.GetString(0));
+            }
+
+            // OpenXml agile encryption aes128+sha1+cbc
+            using (var reader = ExcelReaderFactory.CreateOpenXmlReader(
+                Configuration.GetTestWorkbook("agile_AES128_SHA1_CBC_pwd_password"),
+                new ExcelReaderConfiguration() { Password = "password" }))
+            {
+                reader.Read();
+                Assert.AreEqual("Password: password", reader.GetString(0));
+            }
+
+            // OpenXml agile encryption aes128+sha384+cbc
+            using (var reader = ExcelReaderFactory.CreateOpenXmlReader(
+                Configuration.GetTestWorkbook("agile_AES128_SHA384_CBC_pwd_password"),
+                new ExcelReaderConfiguration() { Password = "password" }))
+            {
+                reader.Read();
+                Assert.AreEqual("Password: password", reader.GetString(0));
+            }
+
+            // OpenXml agile encryption aes128+sha512+cbc
+            using (var reader = ExcelReaderFactory.CreateOpenXmlReader(
+                Configuration.GetTestWorkbook("agile_AES128_SHA512_CBC_pwd_password"),
+                new ExcelReaderConfiguration() { Password = "password" }))
+            {
+                reader.Read();
+                Assert.AreEqual("Password: password", reader.GetString(0));
+            }
+
+            // OpenXml agile encryption aes192+sha512+cbc
+            using (var reader = ExcelReaderFactory.CreateOpenXmlReader(
+                Configuration.GetTestWorkbook("agile_AES192_SHA512_CBC_pwd_password"),
+                new ExcelReaderConfiguration() { Password = "password" }))
+            {
+                reader.Read();
+                Assert.AreEqual("Password: password", reader.GetString(0));
+            }
+
+            // OpenXml agile encryption aes256+sha512+cbc
+            using (var reader = ExcelReaderFactory.CreateOpenXmlReader(
+                Configuration.GetTestWorkbook("agile_AES256_SHA512_CBC_pwd_password"),
+                new ExcelReaderConfiguration() { Password = "password" }))
+            {
+                reader.Read();
+                Assert.AreEqual("Password: password", reader.GetString(0));
+            }
+
+            // OpenXml agile encryption 3des+sha384+cbc
+            using (var reader = ExcelReaderFactory.CreateOpenXmlReader(
+                Configuration.GetTestWorkbook("agile_DESede_SHA384_CBC_pwd_password"),
+                new ExcelReaderConfiguration() { Password = "password" }))
+            {
+                reader.Read();
+                Assert.AreEqual("Password: password", reader.GetString(0));
+            }
+
+            // The following encryptions do not exist on netstandard yet (aug 2017)
+#if NET20 || NET45
+            // OpenXml agile encryption des+md5+cbc
+            using (var reader = ExcelReaderFactory.CreateOpenXmlReader(
+                Configuration.GetTestWorkbook("agile_DES_MD5_CBC_pwd_password"),
+                new ExcelReaderConfiguration() { Password = "password" }))
+            {
+                reader.Read();
+                Assert.AreEqual("Password: password", reader.GetString(0));
+            }
+
+            // OpenXml agile encryption rc2+sha1+cbc
+            using (var reader = ExcelReaderFactory.CreateOpenXmlReader(
+                Configuration.GetTestWorkbook("agile_RC2_SHA1_CBC_pwd_password"),
+                new ExcelReaderConfiguration() { Password = "password" }))
+            {
+                reader.Read();
+                Assert.AreEqual("Password: password", reader.GetString(0));
+            }
+#endif
+        }
+
+        [TestMethod]
+        public void OpenXmlThrowsInvalidPassword()
+        {
+            Assert.Throws<Exceptions.InvalidPasswordException>(() =>
+            {
+                using (var reader = ExcelReaderFactory.CreateOpenXmlReader(
+                    Configuration.GetTestWorkbook("agile_AES128_MD5_CBC_pwd_password"),
+                    new ExcelReaderConfiguration() { Password = "wrongpassword" }))
+                {
+                    reader.Read();
+                }
+            });
         }
     }
 }
